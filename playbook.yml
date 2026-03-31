@@ -1,0 +1,9 @@
+- hosts: localhost
+  tasks:
+    - name: Run Docker container
+      docker_container:
+        name: patient-app
+        image: patient-monitor
+        state: started
+        ports:
+          - "5000:5000"

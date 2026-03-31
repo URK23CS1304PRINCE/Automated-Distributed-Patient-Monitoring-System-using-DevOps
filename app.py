@@ -9,23 +9,20 @@ import time
 app = Flask(__name__)
 app.secret_key = "secret123"
 
-# 🔐 FORCE LOGIN FOR ALL ROUTES
+# 🔐 FORCE LOGIN
 @app.before_request
 def require_login():
     allowed_routes = ["login", "static"]
-
     if request.endpoint not in allowed_routes and "user" not in session:
         return redirect("/login")
 
 
-# 🔹 Initial sample data
-latest_data = [
-    {"patient_id": 1, "heart_rate": 80, "temperature": 37.0, "spo2": 98, "state": "STABLE"},
-    {"patient_id": 2, "heart_rate": 110, "temperature": 38.5, "spo2": 92, "state": "WARNING"},
-    {"patient_id": 3, "heart_rate": 120, "temperature": 39.0, "spo2": 88, "state": "CRITICAL"}
-]
+# 🔹 GLOBAL DATA
+latest_data = []
+lock = threading.Lock()
 
-# 🔹 SOCKET SERVER (LOCAL DISTRIBUTED SYSTEM)
+
+# 🔹 SOCKET SERVER (Distributed Mode)
 def socket_server():
     HOST = "0.0.0.0"
     PORT = 9999
@@ -52,8 +49,9 @@ def handle_client(conn):
 
             data_dict = json.loads(data)
 
-            latest_data.append(data_dict)
-            latest_data = latest_data[-10:]
+            with lock:
+                latest_data.append(data_dict)
+                latest_data = latest_data[-10:]
 
         except:
             break
@@ -61,18 +59,19 @@ def handle_client(conn):
     conn.close()
 
 
-# 🔥 CLOUD AUTO-SIMULATION
+# 🔥 SMART SIMULATION (ALWAYS RUNS)
 def simulate_patients():
     global latest_data
 
     while True:
         new_data = []
 
-        for i in range(1, 6):
+        for i in range(1, 11):  # 🔥 10 patients
             heart = random.randint(60, 130)
             temp = round(random.uniform(36.0, 39.5), 1)
             spo2 = random.randint(85, 100)
 
+            # 🔥 REALISTIC CONDITIONS
             if heart > 110 or spo2 < 90:
                 state = "CRITICAL"
             elif heart > 95 or temp > 38:
@@ -88,7 +87,9 @@ def simulate_patients():
                 "state": state
             })
 
-        latest_data = new_data
+        with lock:
+            latest_data = new_data
+
         time.sleep(3)
 
 
@@ -128,13 +129,15 @@ def data():
 
 
 # 🚀 MAIN
-PORT = int(os.environ.get("PORT", 10000))
+if __name__ == "__main__":
 
-if os.environ.get("RENDER") is None:
-    # 💻 LOCAL → REAL DISTRIBUTED SYSTEM
-    threading.Thread(target=socket_server, daemon=True).start()
-else:
-    # 🌐 CLOUD → SIMULATION
+    # 🔥 ALWAYS RUN SIMULATION
     threading.Thread(target=simulate_patients, daemon=True).start()
 
-app.run(host="0.0.0.0", port=PORT)
+    # 🔥 ALSO RUN SOCKET (optional distributed)
+    try:
+        threading.Thread(target=socket_server, daemon=True).start()
+    except:
+        print("Socket already in use")
+
+    app.run(host="0.0.0.0", port=5000)

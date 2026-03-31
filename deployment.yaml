@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: patient-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: patient-app
+  template:
+    metadata:
+      labels:
+        app: patient-app
+    spec:
+      containers:
+        - name: patient-app
+          image: judaprince/patient-monitor:latest
+          ports:
+            - containerPort: 5000
