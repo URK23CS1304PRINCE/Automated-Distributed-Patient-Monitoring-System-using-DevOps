@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>IMMPIaH Smart Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body {
+    margin:0;
+    font-family:'Segoe UI';
+    background: linear-gradient(135deg,#0f172a,#1e293b);
+    color:white;
+}
+
+/* Navbar */
+.navbar {
+    display:flex;
+    justify-content:space-between;
+    padding:15px 25px;
+}
+
+/* Analytics */
+.analytics {
+    display:flex;
+    justify-content:space-around;
+    margin:15px;
+}
+
+.box {
+    background:rgba(255,255,255,0.08);
+    padding:15px;
+    border-radius:12px;
+    transition:0.3s;
+}
+
+/* Cards */
+.container {
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:20px;
+    padding:20px;
+}
+
+.card {
+    padding:20px;
+    border-radius:15px;
+    background:rgba(255,255,255,0.08);
+}
+
+.critical { border-left:5px solid red; }
+.warning { border-left:5px solid orange; }
+.stable { border-left:5px solid lime; }
+
+/* Chart */
+.chart-box {
+    width:400px;
+    height:220px;
+    margin:auto;
+    background:rgba(255,255,255,0.05);
+    padding:10px;
+    border-radius:15px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="navbar">
+<h2>🏥 Smart Patient Monitoring</h2>
+<a href="/logout">Logout</a>
+</div>
+
+<!-- Analytics -->
+<div class="analytics">
+<div class="box">Avg HR: <span id="avgHR"></span></div>
+<div class="box">Critical: <span id="critical"></span></div>
+<div class="box">Risk Level: <span id="risk"></span></div>
+<div class="box">Trend: <span id="trend"></span></div>
+<div class="box">Suggestion: <span id="suggest"></span></div>
+</div>
+
+<!-- Cards -->
+<div class="container" id="cards"></div>
+
+<!-- Chart -->
+<div class="chart-box">
+<canvas id="chart"></canvas>
+</div>
+
+<script>
+let chart;
+let prevAvg = 0;
+let alertCooldown = false;
+
+async function loadData(){
+    const res = await fetch("/data");
+    let p = (await res.json()).patients;
+
+    // Sort by severity
+    const order = {"CRITICAL":3,"WARNING":2,"STABLE":1};
+    p.sort((a,b)=>order[b.state]-order[a.state]);
+
+    // Cards
+    let html="";
+    p.forEach(d=>{
+        html+=`
+        <div class="card ${d.state.toLowerCase()}">
+        <h3>Patient ${d.patient_id}</h3>
+        ❤️ ${d.heart_rate}<br>
+        🌡 ${d.temperature}<br>
+        🫁 ${d.spo2}<br>
+        <b>${d.state}</b>
+        </div>`;
+    });
+    document.getElementById("cards").innerHTML=html;
+
+    // Analytics
+    let avgHR = p.reduce((a,b)=>a+b.heart_rate,0)/p.length;
+    document.getElementById("avgHR").innerText = avgHR.toFixed(1);
+
+    let critical = p.filter(x=>x.state=="CRITICAL").length;
+    document.getElementById("critical").innerText = critical;
+
+    // Risk
+    let risk = (critical/p.length)*100;
+    document.getElementById("risk").innerText =
+        risk>50?"HIGH":risk>25?"MEDIUM":"LOW";
+
+    // Trend
+    let trend = avgHR > prevAvg ? "⬆ Increasing" :
+                avgHR < prevAvg ? "⬇ Decreasing" : "➡ Stable";
+    document.getElementById("trend").innerText = trend;
+    prevAvg = avgHR;
+
+    // Suggestion
+    document.getElementById("suggest").innerText =
+        critical>2?"Immediate Attention Needed":
+        critical>0?"Monitor Closely":"All Stable";
+
+    // Chart
+    if(chart) chart.destroy();
+
+    chart = new Chart(document.getElementById("chart"), {
+        type:'line',
+        data:{
+            labels:p.map(x=>"P"+x.patient_id),
+            datasets:[{
+                label:"Heart Rate",
+                data:p.map(x=>x.heart_rate),
+                borderWidth:2
+            }]
+        },
+        options:{
+            responsive:true,
+            maintainAspectRatio:false
+        }
+    });
+
+    // Alert control
+    if(critical>0 && !alertCooldown){
+        alert("🚨 Critical Patient!");
+        alertCooldown=true;
+        setTimeout(()=>alertCooldown=false,10000);
+    }
+}
+
+setInterval(loadData,2000);
+loadData();
+</script>
+
+</body>
+</html>
